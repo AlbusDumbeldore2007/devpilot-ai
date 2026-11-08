@@ -4,6 +4,8 @@
 
 The UI is a premium dark SaaS dashboard built with React, Vite, plain CSS, React Router DOM and Lucide icons. Every number, chart, project and task is read from MongoDB — there are no fake dashboard statistics or hardcoded task lists. AI features call the Express backend, which owns the API key, builds structured prompts, validates the model's JSON, and persists only clean data.
 
+**Assessment documentation:** [PRD.md](PRD.md) · [HLD.md](HLD.md) · [LLD.md](LLD.md) · [GitHub setup guide](GITHUB_SETUP.md)
+
 ---
 
 ## Table of contents
@@ -169,6 +171,10 @@ devpilot-ai/
 ├── .env.example
 ├── .gitignore
 ├── package.json             # root scripts
+├── PRD.md                   # product requirements
+├── HLD.md                   # high-level design
+├── LLD.md                   # low-level design
+├── GITHUB_SETUP.md          # repository publishing guide
 └── README.md
 ```
 
@@ -581,7 +587,7 @@ Legend: **File(s)** = where the concept is implemented. **Demonstration** = how 
 | 17 | **JavaScript Hoisting** | `client/src/utils/jsConceptsDemo.js` (`runHoistingDemo`), `client/src/pages/JsLab.jsx` | Open **JS Lab → Hoisting** and click run. Output shows `var` as `undefined` before assignment, a function declaration callable early, a function expression failing early, and the `let` TDZ error. |
 | 18 | **JavaScript Promises vs Callbacks** | `client/src/utils/jsConceptsDemo.js` (`fetchTasksWithCallback`, `fetchTasksWithPromise`, `promisifyCallback`, `runCallbacksDemo`, `runPromisesDemo`), `client/src/pages/JsLab.jsx` | Open **JS Lab → Promises vs Callbacks** and run the demo. Show the error-first callback path, the async/await promise path and the promisified callback path. |
 | 19 | **React Component Composition** | `client/src/components/` (Sidebar, Navbar, TaskCard, ProjectCard, Modal, StatCard, etc.), `client/src/layouts/AppLayout.jsx` | Show `AppLayout` composing Sidebar + Navbar + HealthBanner + `<Outlet />`. Show `ProjectFormModal`/`TaskFormModal` composing `Modal`, `ErrorAlert`, `Spinner` and form fields. |
-| 20 | **useEffect** | `client/src/pages/Dashboard.jsx`, `client/src/hooks/useSystemHealth.js`, `client/src/pages/Tasks.jsx`, `client/src/pages/ProjectDetails.jsx` | Dashboard runs `useEffect` on mount/refresh, fetches stats, aborts on unmount. Health polling runs on an interval. Task/project pages refetch when filters or `refreshKey` change. |
+| 20 | **useEffect** | `client/src/pages/Dashboard.jsx`, `client/src/hooks/useSystemHealth.js`, `client/src/pages/Tasks.jsx`, `client/src/pages/ProjectDetails.jsx` | Dashboard runs `useEffect` on mount/refresh, fetches stats, aborts on unmount. Health status loads on mount and can be refreshed from the configuration banner. Task/project pages refetch when filters or `refreshKey` change. |
 | 21 | **useState** | Forms, filters, modals and AI pages | Open a project/task modal, type, change filters, open/close modals, generate an AI plan, send a chat message, toggle a generated task. All are `useState`-driven. |
 | 22 | **MongoDB CRUD Operations** | `server/controllers/projectController.js`, `taskController.js`, `server/models/*.js` | Create a project → edit it → add a task → mark it complete → drag it on the Kanban → delete the task → delete the project. Confirm each step in the UI and through `/api/projects` / `/api/tasks`. Project deletion cascades tasks. |
 | 23 | **MongoDB Schema Modeling** | `server/models/Project.js`, `server/models/Task.js` | Show field types, required/min/max validation, enums, timestamps, indexes, the `Task.project` ObjectId reference, the Project `tasks` virtual, and the `pre('findOneAndDelete')` cascade hook. |
@@ -602,13 +608,13 @@ git commit -m "chore: bootstrap DevPilot AI workspace"
 git checkout -b feature/project-crud
 git add server client
 git commit -m "feat(projects): add validated project CRUD and cascade delete"
-git checkout main
+git checkout master
 git merge --no-ff feature/project-crud
 
 # Continue with the next slice
 git checkout -b feature/ai-planner
 git commit -am "feat(ai): add structured plan generation, validation and save flow"
-git checkout main
+git checkout master
 git merge --no-ff feature/ai-planner
 ```
 
