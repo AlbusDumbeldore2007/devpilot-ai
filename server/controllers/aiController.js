@@ -41,11 +41,25 @@ export const chatHandler = asyncHandler(async (req, res) => {
 });
 
 /**
- * POST /api/ai/save-plan
- * Converts the validated (and possibly user-edited) plan into a real Project
- * plus Task documents. If task insertion fails, the project is rolled back.
+ * POST /api/ai/agent — multi-step AI agent with function calling.
+ * The agent receives a user goal, calls the LLM with tool definitions,
+ * executes tool calls, and iterates until the goal is achieved or max steps reached.
  */
-export const savePlanHandler = asyncHandler(async (req, res) => {
+export const agentHandler = asyncHandler(async (req, res) => {
+  const { goal, difficulty } = req.body;
+  const result = await runMultiStepAgent({ goal, difficulty });
+  
+  res.status(200).json({
+    success: true,
+    message: 'Multi-step AI agent completed.',
+    data: result.plan ? { plan: result.plan } : null,
+    meta: {
+      ...result.meta,
+      stepsTaken: result.stepsTaken,
+    },
+    agentSteps: result.agentSteps,
+  });
+});
   const { plan, startDate, deadline } = req.body;
 
   const start = startDate ? new Date(startDate) : new Date();

@@ -1,0 +1,266 @@
+// DevPilot AI — relational schema (PostgreSQL + Prisma)
+// PostgreSQL with pgvector for vector similarity search.
+// When pgvector is unavailable (e.g., PGlite without the extension),
+// embeddings are stored as JSON arrays and similarity is computed in application code.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  DEVELOPER
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(DEVELOPER)
+  avatarUrl    String?
+  googleId     String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships     TeamMember[]
+  ownedTeams      Team[]           @relation("TeamOwner")
+  createdProjects Project[]        @relation("ProjectCreator")
+  createdTasks    Task[]           @relation("TaskCreator")
+  assignedTasks   Task[]           @relation("TaskAssignee")
+  refreshTokens   RefreshToken[]
+  aiUsage         AiUsage[]
+  payments        Payment[]
+  evalRuns        EvalRun[]
+
+  @@index([role])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner     User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members   TeamMember[]
+  projects  Project[]
+
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  teamRole  String   @default("MEMBER")
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String        @default("")
+  status      ProjectStatus @default(PLANNING)
+  startDate   DateTime      @default(now())
+  deadline    DateTime?
+  teamId      String
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  team         Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy    User                @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  technologies ProjectTechnology[]
+  tasks        Task[]
+  aiUsage      AiUsage[]
+  payments     Payment[]
+
+  @@index([teamId, status])
+  @@index([createdAt])
+  @@index([deadline])
+}
+
+// 3NF: technologies are atomic attributes owned by the project.
+model ProjectTechnology {
+  id        String @id @default(cuid())
+  projectId String
+  name      String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([name])
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  title       String
+  description String       @default("")
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  projectId   String
+  assigneeId  String?
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User    @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, status])
+  @@index([projectId, priority])
+  @@index([dueDate])
+  @@index([assigneeId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AiUsage {
+  id               String   @id @default(cuid())
+  userId           String?
+  projectId        String?
+  provider         String
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  costUsd          Decimal  @default(0) @db.Decimal(12, 6)
+  createdAt        DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([projectId])
+}
+
+model EvalCase {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  idea            String
+  difficulty      String   @default("Medium")
+  expectedMinTasks Int     @default(1)
+  tags            String[] @default([])
+  createdAt       DateTime @default(now())
+
+  results EvalResult[]
+}
+
+model EvalRun {
+  id           String    @id @default(cuid())
+  status       String    @default("RUNNING")
+  model        String
+  totalCases   Int
+  passedCases  Int       @default(0)
+  score        Float     @default(0)
+  triggeredById String?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  triggeredBy User?        @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  results     EvalResult[]
+
+  @@index([startedAt])
+}
+
+model EvalResult {
+  id        String  @id @default(cuid())
+  runId     String
+  caseId    String
+  passed    Boolean
+  latencyMs Int
+  details   Json?
+
+  run  EvalRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  case EvalCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, caseId])
+  @@index([caseId])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  paymentId String?
+  amount    Int
+  currency  String   @default("INR")
+  status    String   @default("CREATED")
+  provider  String   @default("razorpay")
+  userId    String
+  projectId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Document chunks stored in PostgreSQL.
+// `embedding` is a vector(1536) when pgvector is available;
+// otherwise it is stored as a JSON array and similarity is computed
+// in application code (cosine distance).
+model DocumentChunk {
+  id         String                      @id @default(cuid())
+  documentId String
+  chunkIndex Int
+  content    String
+  embedding  Json?            // vector as JSON [number, ...] when pgvector absent
+  createdAt  DateTime          @default(now())
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+}

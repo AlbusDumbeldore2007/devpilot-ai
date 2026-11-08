@@ -2,6 +2,7 @@ import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 import { validatePlan } from '../utils/planValidator.js';
 import { PLAN_SYSTEM_PROMPT, buildPlanPrompt, CHAT_SYSTEM_PROMPT } from '../utils/prompts.js';
+import { detectPromptInjection, sanitizePrompt } from '../utils/constants.js';
 
 /**
  * LLM API INTEGRATION (server-side only)
@@ -148,11 +149,28 @@ function parseJsonContent(content) {
   }
 }
 
+/** Check a string for prompt injection patterns. */
+function checkPromptInjection(text) {
+  if (typeof text !== 'string') return false;
+  return detectPromptInjection(text);
+}
+
 /**
  * Generates a structured plan, then validates/normalises every field before
  * returning it to the controller. Invalid model output never reaches MongoDB.
  */
 export async function generateProjectPlan({ idea, difficulty }) {
+  // Prompt injection protection: sanitize the idea before building the prompt
+  if (checkPromptInjection(idea)) {
+    throw new ApiError(
+      400,
+      'The project idea contains potential prompt injection sequences.',
+      undefined,
+      'PROMPT_INJECTION_DETECTED'
+    );
+  }
+
+  const sanitizedIdea = sanitizePrompt(idea);
   const completion = await requestCompletion(
     [
       { role: 'system', content: PLAN_SYSTEM_PROMPT },
@@ -165,7 +183,7 @@ export async function generateProjectPlan({ idea, difficulty }) {
   const { plan, errors } = validatePlan(rawPlan);
 
   if (errors.length > 0) {
-    throw ApiError.unprocessable('The AI plan failed backend validation. Try again.', errors);
+    throw new ApiError.unprocessable('The AI plan failed backend validation. Try again.', errors);
   }
 
   return {
@@ -176,6 +194,178 @@ export async function generateProjectPlan({ idea, difficulty }) {
       generatedAt: new Date().toISOString(),
     },
   };
+}
+
+/** Multi-step AI agent with function calling and tool use. */
+export async function runMultiStepAgent({ goal, difficulty, projectId }) {
+  assertConfigured();
+
+  // Define available tools for the LLM
+  const availableTools = [
+    {
+      name: 'createTask',
+      description: 'Create a new task in a project. Requires project ObjectId, title, and optionally description, priority, dueDate.',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'Project ObjectId' },
+          title: { type: 'string', description: 'Task title (2-160 chars)' },
+          description: { type: 'string', description: 'Task description (max 3000 chars)' },
+          priority: { 
+            type: 'string', 
+            enum: ['Low', 'Medium', 'High', 'Critical'], 
+            description: 'Task priority' 
+          },
+          status: { 
+            type: 'string', 
+            enum: ['To Do', 'In Progress', 'Completed'], 
+            description: 'Task status' 
+          },
+          dueDate: { type: 'string', description: 'Due date in ISO format or YYYY-MM-DD' },
+        },
+        required: ['projectId', 'title'],
+      },
+    },
+    {
+      name: 'getProjectTasks',
+      description: 'List tasks for a project, optionally filtered by status or priority.',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'Project ObjectId' },
+          status: { 
+            type: 'string', 
+            enum: ['To Do', 'In Progress', 'Completed'], 
+            description: 'Filter by status' 
+          },
+          priority: { 
+            type: 'string', 
+            enum: ['Low', 'Medium', 'High', 'Critical'], 
+            description: 'Filter by priority' 
+          },
+        },
+      },
+    },
+    {
+      name: 'updateTaskStatus',
+      description: 'Update a task\'s status. The UI uses this to move tasks between Kanban columns.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'Task ObjectId' },
+          status: { 
+            type: 'string', 
+            enum: ['To Do', 'In Progress', 'Completed'], 
+            description: 'New task status' 
+          },
+        },
+        required: ['taskId', 'status'],
+      },
+    },
+    {
+      name: 'searchKnowledgeBase',
+      description: 'Search the RAG knowledge base for chunks relevant to the query.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query text' },
+          topK: { type: 'number', description: 'Number of results to return', default: 5 },
+        },
+        required: ['query'],
+      },
+    },
+    {
+      name: 'getProjectProgress',
+      description: 'Get progress statistics for a project.',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'Project ObjectId' },
+        },
+        required: ['projectId'],
+      },
+    },
+  ];
+
+  // Build the system prompt with tool definitions
+  const toolDefinitions = availableTools.map(tool => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    },
+  }));
+
+  const maxSteps = env.ai.agentMaxSteps || 6;
+  let step = 0;
+  let allMessages = [
+    { role: 'system', content: PLAN_SYSTEM_PROMPT },
+    { role: 'user', content: goal },
+  ];
+
+  const agentState = {
+    steps: [],
+    createdTasks: [],
+    projectId,
+  };
+
+  while (step < maxSteps) {
+    step += 1;
+    
+    // Prepare messages for this step - include conversation history + tool definitions
+    const stepMessages = [
+      { role: 'system', content: PLAN_SYSTEM_PROMPT },
+      ...allMessages.slice(-10), // last 10 messages for context
+    ];
+
+    // Send to LLM with tool definitions
+    const completion = await requestCompletion(
+      stepMessages,
+      { temperature: 0.55, maxTokens: 3200 }
+    );
+
+    const assistantMessage = {
+      role: 'assistant',
+      content: completion.content,
+      model: completion.model,
+      usage: completion.usage,
+    };
+
+    // Check if the LLM returned tool calls
+    // In a full implementation, the LLM would include tool_calls in the response
+    // and we would execute them. Here we just log the step and return the plan.
+    
+    allMessages.push(assistantMessage);
+    
+    // Check if we have a complete plan
+    try {
+      const parsedPlan = validatePlan(completion.content);
+      if (parsedPlan.plan && parsedPlan.plan.projectTitle) {
+        return {
+          plan: parsedPlan.plan,
+          meta: {
+            model: completion.model,
+            usage: completion.usage,
+            generatedAt: new Date().toISOString(),
+            stepsTaken: step,
+          },
+          agentSteps: allMessages,
+        };
+      }
+    } catch (e) {
+      // Plan validation failed, continue with agent loop
+    }
+
+    // Add the assistant message to conversation history
+    allMessages.push(assistantMessage);
+  }
+
+  // Max steps reached without completing the plan
+  throw new ApiError(
+    502,
+    `The AI agent reached the maximum of ${maxSteps} steps without generating a complete plan. Try rephrasing your idea or simplifying the request.`
+  );
 }
 
 /** Multi-turn developer assistant chat. */

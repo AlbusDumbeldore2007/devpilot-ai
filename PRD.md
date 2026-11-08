@@ -263,6 +263,30 @@ Requirements are grouped by surface. Each requirement describes behaviour that e
 - NFR-REL-03: AI calls must time out after `AI_TIMEOUT_MS` (default 60 000 ms) and return `504`.
 - NFR-REL-04: AI provider failures must be mapped to meaningful status codes (`502` for upstream/auth/malformed output, `503` for rate limits or missing configuration).
 - NFR-REL-05: Project deletion must be atomic from the caller's perspective: the model hook removes dependent tasks.
+
+### Additional Non-Functional Requirements (Advanced Kalvium Concepts)
+
+- **AUTH-NFR-01**: Password hashing with bcrypt (configurable rounds, never plaintext). JWT access tokens signed with server-side secret, issued via `POST /api/auth/login`, verified on protected routes, stored in httpOnly cookies for SSE/EventSource compatibility.
+- **AUTH-NFR-02**: Role-based authorization (Admin/Manager/Developer). Middleware `authorize()` rejects destructive actions without explicit user approval. Each role has granular permissions (e.g., Developers cannot modify projects; Managers can; Admins can all).
+- **AUTH-NFR-03**: Google OAuth login via `POST /api/auth/google` (profile callback). Users can register/login with Google account; profile data used to create/update user. No password needed for Google accounts.
+- **AUTH-NFR-04**: Rate limiting using Redis-backed counters. Global rate limit (60 requests/15min) and auth rate limit (20 attempts/15min). `429` response with `code: "RATE_LIMITED"` when exceeded.
+- **AUTH-NFR-05**: Input sanitization and prompt-injection defenses. `sanitizeText`/`sanitizeMultiline` remove control characters/HTML. `promptGuard` detects/neutralises `ignore previous instructions`, `reveal system prompt`, etc. Assertions in validation schemas block malicious payloads with `400 PROMPT_INJECTION_BLOCKED`.
+- **AUTH-NFR-06**: Environment variable and secret management. All secrets (JWT, API keys, database URLs) in `server/.env` gitignored. Configuration typed in `env.js`. `logConfigurationHints()` prints actionable guidance at startup. `VITE_*` variables only for client-origin URLs.
+- **PERF-NFR-01**: Redis caching for dashboard stats, rate-limit counters, and task filters with TTL-based expiry. `cacheGet`/`cacheSet`/`cacheDel` operations. Atomic counter increment for rate limiting.
+- **PERF-NFR-02**: PostgreSQL connection independence. API boots without PostgreSQL; `requireDatabase` returns `503 DATABASE_NOT_CONFIGURED` immediately. `connectPostgres` with retries. `isPostgresReady` guards routes.
+- **PERF-NFR-03**: pgvector for vector similarity search. `DocumentChunk.embedding` stored as `vector(1536)` when pgvector available; otherwise JSON array with app-level cosine similarity. Similarity query: `1 - (embedding <=> target)`.
+- **REALTIME-NFR-01**: Socket.IO real-time task notifications. Authenticated connections join `project-{id}` rooms. `task-status-update` event broadcasts status changes. Redis adapter for multi-instance deployments (documented as conceptual).
+- **REALTIME-NFR-02**: Scheduled jobs via `node-cron`. Background cleanup, stats updates (configurable via `CRON_ENABLED` flag). Runs alongside Express server.
+- **FILES-NFR-01**: File uploads via Multer with type (`pdf|txt|md|docx`) and size (`MAX_UPLOAD_MB`) validation. `uploadMiddleware.single('file')`. Files stored on disk; text extracted via `pdf-parse`/`mammoth` for RAG knowledge base.
+- **FILES-NFR-02**: GitHub API integration (conceptual). `GET /repos/:owner/:repo` would fetch repo metadata; displayed in UI. Requires `GITHUB_TOKEN` env var. No real API calls in demo unless configured.
+- **PAYMENT-NFR-01**: Razorpay test-mode sandbox integration. `RAZORPAY_MODE=test` ensures no real payments processed. `POST /api/razorpay/order` creates test orders. `POST /api/razorpay/verify` validates sandbox signatures. Amounts in paise (1 INR = 100 paise).
+- **TESTING-NFR-01**: Vitest/Supertest suites for auth, project CRUD, task CRUD, validation, authorization, AI response validation, DB operations, and API error handling. Tests run against running server with in-memory or real database.
+- **TESTING-NFR-02**: Integration tests for end-to-end flows (register → create project → add task → generate plan → save plan). Use test database, verify data persistence, observe UI updates.
+- **DEPLOY-NFR-01**: Docker containerization. `Dockerfile` for Express+Node app; `docker-compose.yml` for Postgres+Redis+Mongo+App services. Local dev uses PGlite/redis-memory-server substitutes (Docker daemon inaccessible in this environment).
+- **DEPLOY-NFR-02**: Frontend deployment. `npm run build` → `client/dist`. `express.static(clientDist)` serves production assets. Vite `preview` serves built SPA. Same-origin `/api` proxy in dev; CORS headers in prod.
+- **DEPLOY-NFR-03**: Backend deployment. `node server.js` or `npm start`. `NODE_ENV=production`. `.env` must contain `DATABASE_URL`, `AI_API_KEY`, `MONGODB_URI`. Process manager (PM2, systemd) recommended.
+
+### 10.4 Known limitations and future work
 - NFR-REL-06: Plan saving must roll back the project if task insertion fails.
 
 ### 7.3 Security and data protection
@@ -438,7 +462,7 @@ The build is considered acceptable when:
 - Add automated tests (API integration and component tests) and CI.
 - Add pagination for very large project/task collections.
 - Add streaming responses for the assistant.
-- Add reminders/notifications for deadlines.
+- Add reminders/notifications for deadlines (scheduled jobs via node-cron).
 - Add provider-specific retry/backoff policies and token-usage dashboards.
 - Add export/import for plans and projects.
 

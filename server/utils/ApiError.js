@@ -22,12 +22,20 @@ export class ApiError extends Error {
     return new ApiError(401, message);
   }
 
+  static forbidden(message = 'Forbidden', code = 'FORBIDDEN') {
+    return new ApiError(403, message, undefined, code);
+  }
+
   static notFound(message = 'Resource not found') {
     return new ApiError(404, message);
   }
 
-  static conflict(message = 'Resource already exists') {
-    return new ApiError(409, message);
+  static conflict(message = 'Resource already exists', code = undefined) {
+    return new ApiError(409, message, undefined, code);
+  }
+
+  static tooManyRequests(message = 'Too many requests. Please slow down.') {
+    return new ApiError(429, message, undefined, 'RATE_LIMITED');
   }
 
   static unprocessable(message = 'AI returned an unusable response', details) {

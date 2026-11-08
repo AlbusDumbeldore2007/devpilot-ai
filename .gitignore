@@ -12,6 +12,7 @@ node_modules/
 dist/
 build/
 client/dist/
+client/dist-ssr/
 
 # Logs
 logs/
@@ -29,3 +30,8 @@ data/
 .local/
 mongodb-data/
 coverage/
+server/uploads/
+server/.pglite/
+server/.redis/
+*.pglite/
+*.pglite.lock/

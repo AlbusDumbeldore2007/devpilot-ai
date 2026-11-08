@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # API Server
+  api:
+    build: .
+    container_name: devpilot-ai-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - PUBLIC_BASE_URL=http://localhost:5000
+      - CLIENT_ORIGIN=http://localhost:5173
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/devpilot?schema=public
+      - MONGODB_URI=mongodb://mongo:27017/devpilot
+      - REDIS_URL=redis://redis:6379
+      - JWT_ACCESS_SECRET=devpilot-development-only-secret-change-me
+      - BCRYPT_ROUNDS=10
+      - AI_API_KEY=${AI_API_KEY}
+      - AI_BASE_URL=https://api.openai.com/v1
+      - AI_MODEL=gpt-4o-mini
+      - AI_TIMEOUT_MS=60000
+      - RATE_LIMIT_MAX=600
+      - AUTH_RATE_MAX=20
+      - AI_RATE_MAX=60
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_MODE=test
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - CRON_ENABLED=true
+      - SOCKETS_ENABLED=true
+      - SSR_ENABLED=true
+    depends_on:
+      db:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir /app
+    command: npm run dev
+
+  # PostgreSQL with pgvector
+  db:
+    image: postgres:16
+    container_name: devpilot-ai-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=devpilot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB
+  mongo:
+    image: mongo:7
+    container_name: devpilot-ai-mongo
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.runCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: devpilot-ai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+  mongo_data:
+  redis_data:

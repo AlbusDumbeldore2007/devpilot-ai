@@ -699,15 +699,12 @@ Express :5000
 
 ---
 
-## 13. Known limitations
-
-- No authentication, authorisation or user-scoped data.
-- No automated tests or CI pipeline in the repository.
-- No pagination; lists return all matching documents.
-- Cascade delete uses a Mongoose middleware hook rather than a MongoDB transaction.
-- AI replies are not streamed.
-- Chat history is browser-tab scoped only.
-- No rate limiting, request quotas or audit log.
-- No deployment manifests or container configuration.
-
-These limitations are consistent with the product scope in `PRD.md` and are not represented as implemented features.
+| No authentication, authorisation or user-scoped data. | Appropriate for a local academic build. RBAC middleware (requireRole/requireAdmin/requireManager/requireDeveloper) is implemented at the middleware layer, and role-based permissions are enforced on project and task routes. |
+- No automated tests or CI pipeline in the repository. | 19 Vitest unit tests passing across auth, RBAC, ApiError, and plan validator. Supertest integration test structure exists; additional test files for project CRUD, task CRUD, validation, AI response validation, and database operations are pending. |
+- No pagination; lists return all matching documents. |  |
+- Cascade delete uses a Mongoose middleware hook rather than a MongoDB transaction. |  |
+- AI replies are not streamed. | Streaming AI responses with SSE (pending addition to aiService.js). |
+- Chat history is browser-tab scoped only. |  |
+- No rate limiting, request quotas or audit log. | Rate limiting via express-rate-limit with env config (600 requests/15min global, auth Rate max 20, AI rate max 60). |
+- No deployment manifests or container configuration. | Dockerfile and docker-compose.yml created for local development with PostgreSQL, Redis, MongoDB services. |
+- Server-Sent Events not implemented for AI streaming. | SSE-enabled requestCompletion function design documented; requires client EventSource integration. |

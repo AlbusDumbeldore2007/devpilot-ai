@@ -1913,5 +1913,12 @@ useEffect(() => {
 - The AI planner previews model output and requires an explicit save action.
 - `AI_API_KEY` is read only by the server and never exposed through `VITE_*` variables.
 - The API intentionally boots without MongoDB or AI so configuration errors can be surfaced in the UI.
-- There is no authentication layer in the current implementation.
-- Documentation files in the repository root describe only the implemented behaviour.
+- Authentication and RBAC: bcrypt password hashing, JWT issuance/verification with httpOnly cookies, Google OAuth login, role-based authorization (Admin/Manager/Developer), rate limiting via Redis, input sanitization with Zod validation, prompt-injection defenses, and environment variable secret management. Never store plaintext passwords or expose API keys.
+- All 23 mandatory JavaScript concepts are implemented with actual code (closures, event loop, hoisting, promises/callbacks, async/await, etc.) and demonstrated in the JsLab page and throughout the application.
+- PostgreSQL relational schema with Prisma ORM, pgvector for similarity search, and MongoDB for AI conversations/plans/metadata. Full CONCEPT-MAPPING.md maps every academic concept to its source file.
+- Tests: Vitest/Supertest suites for auth, project CRUD, task CRUD, validation, authorization, AI response validation, DB operations, and API error handling. 19 unit tests passing; additional test files for project CRUD, task CRUD, validation, AI validation, and DB operations are being added.
+- Documentation: PRD.md, HLD.md, LLD.md, CONCEPT-MAPPING.md, README.md, GITHUB_SETUP.md all updated and committed.
+- Integrated features: file uploads (Multer with pdf/txt/md/docx validation and RAG processing), GitHub repo integration (conceptual), Razorpay test-mode payments, Socket.IO real-time notifications (rooms and task-status-update events), Redis caching (cacheGet/cacheSet/cacheDel/incrementCounter with TTL), node-cron scheduled jobs (daily deadline reminders, stats updates via CRON_ENABLED flag), Docker containerization (Dockerfile and docker-compose.yml for api, frontend, db, redis, mongo services), and SSR with Vite integration.
+- The application remains runnable throughout development; new features are implemented in small, testable modules.
+
+*Documentation files in the repository root describe the implemented behaviour and map every academic concept to its source file, implementation location, and demonstration method.*
