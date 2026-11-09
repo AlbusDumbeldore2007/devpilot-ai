@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validatePlan } from './planValidator.js'
+import { validatePlan } from './utils/planValidator.js'
 
 describe('Plan Validator', () => {
   it('should reject non-object input', () => {
@@ -32,7 +32,8 @@ describe('Plan Validator', () => {
             },
           ],
         },
-      ])
+      ],
+    })
       expect(result.errors).toHaveLength(0)
       expect(result.plan).not.toBeNull()
       expect(result.plan.projectTitle).toBe('My Project')

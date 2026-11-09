@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { PGlite } from '@electric-sql/pglite';
 import { createServer } from 'pglite-server';
 import { RedisMemoryServer } from 'redis-memory-server';
+import { vector } from '@electric-sql/pglite-pgvector';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverDir = path.resolve(__dirname, '..');
@@ -47,7 +48,12 @@ async function main() {
     log(`Port ${pgPort} already has a PostgreSQL server — reusing it.`);
   } else {
     log(`Starting PGlite (PostgreSQL + pgvector) on 127.0.0.1:${pgPort} …`);
-    const db = new PGlite(dataDir);
+    const db = new PGlite(dataDir, {
+  	extensions: {
+    		vector,
+  	},
+      });
+
     await db.waitReady;
     await db.exec('CREATE EXTENSION IF NOT EXISTS vector;');
     const pgServer = createServer(db);

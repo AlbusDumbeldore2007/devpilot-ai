@@ -40,15 +40,25 @@ async function requestCompletion(messages, { jsonMode = false, temperature = 0.6
   };
 
   try {
-    let response = await fetch(`${env.ai.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.ai.apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+    let response;
+    // Retry transient provider overload (429/503 — e.g. Gemini "high demand"
+    // spikes are temporary) with backoff before surfacing an error.
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      response = await fetch(`${env.ai.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${env.ai.apiKey}`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (![429, 503].includes(response.status) || attempt === MAX_ATTEMPTS) break;
+      await response.body?.cancel().catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    }
 
     // Some providers reject `response_format`; gracefully retry without it.
     if (!response.ok && jsonMode && [400, 422].includes(response.status)) {

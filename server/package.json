@@ -8,13 +8,16 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "seed": "node utils/seed.js"
+    "test": "vitest run",
+    "seed": "node utils/seed.js",
+    "dev:services": "node scripts/dev-services.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.15",
+    "@electric-sql/pglite-pgvector": "^0.0.16",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",

@@ -9,6 +9,8 @@ import {
 } from '../controllers/projectController.js';
 import { validateBody, validateObjectIdParam, requireDatabase, requirePostgres } from '../middleware/validate.js';
 import { validateProjectPayload } from '../utils/validators.js';
+import { optionalAuth } from '../middleware/auth.js';
+import { ApiError } from '../utils/ApiError.js';
 import { requireRole, requireDeveloper, requireManager, requireAdmin } from '../middleware/rbac.js';
 import { prisma } from '../config/prisma.js';
 
@@ -16,6 +18,9 @@ const router = Router();
 
 // All project routes require a healthy MongoDB connection.
 router.use(requireDatabase);
+// Populate req.user when a session token/cookie is present so RBAC can
+// enforce roles; anonymous workspace requests are allowed (see rbac.js).
+router.use(optionalAuth);
 
 /**
  * GET /api/projects - List projects.
@@ -30,14 +35,8 @@ router
     createProject // 201 / 400 / 403
   );
 
-router
-  .route('/:id')
-  .get(validateObjectIdParam('id'), getProject) // 200 / 400 / 404
-  .all(requireRole('ADMIN', 'MANAGER', 'DEVELOPER')) // protect all below
-  .put(validateBody(validateProjectPayload, { partial: true }), updateProject) // 200 / 400 / 403
-  .delete(requireAdmin); // 200 / 403 (only admin can delete projects)
-
-/** Prisma-based SQL routes for PostgreSQL relational features. */
+/** Prisma-based SQL routes for PostgreSQL relational features.
+ * Registered BEFORE '/:id' so '/sql/...' is not captured as an :id param. */
 router.use('/sql', requirePostgres);
 
 router
@@ -70,5 +69,12 @@ router
     if (!project) throw ApiError.notFound('Project not found.');
     res.json({ success: true, data: project });
   }));
+
+router
+  .route('/:id')
+  .get(validateObjectIdParam('id'), getProject) // 200 / 400 / 404
+  .all(requireRole('ADMIN', 'MANAGER', 'DEVELOPER')) // protect all below
+  .put(validateBody(validateProjectPayload, { partial: true }), updateProject) // 200 / 400 / 403
+  .delete(requireAdmin, deleteProject); // 200 / 403 (only admin can delete projects)
 
 export default router;

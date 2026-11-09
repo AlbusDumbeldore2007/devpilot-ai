@@ -1,35 +1,54 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest'
 import request from 'supertest'
-import { prisma } from '../config/prisma.js'
-import { Project } from '../models/Project.js'
-import { Task } from '../models/Task.js'
+import { prisma } from './config/prisma.js'
+import Project from './models/Project.js'
+import Task from './models/Task.js'
 
 let server: any
 let authToken: string
 
+let isConnected = false
+let isServerRunning = false
+
 beforeAll(async () => {
-  // Start the server for integration tests
-  // We'll use a simpler approach - test the functions directly
+  const mongoose = await import('mongoose')
+  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/devpilot_test'
+  try {
+    await mongoose.default.connect(MONGODB_URI, { serverSelectionTimeoutMS: 1500 })
+    isConnected = true
+  } catch {
+    isConnected = false
+  }
+
+  try {
+    const res = await request('http://localhost:5000').get('/api/health')
+    isServerRunning = res.status === 200
+  } catch {
+    isServerRunning = false
+  }
 })
 
 describe('Project CRUD', () => {
-  beforeAll(async () => {
-    // Connect to test MongoDB
-    const mongoose = await import('mongoose')
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/devpilot_test'
-    await mongoose.connect(MONGODB_URI)
+  beforeEach((context) => {
+    if (!isConnected || !isServerRunning) {
+      context.skip()
+      return
+    }
   })
 
   afterEach(async () => {
+    if (!isConnected) return
     // Clean up after each test
     await Project.deleteMany({})
     await Task.deleteMany({})
   })
 
   afterAll(async () => {
-    // Disconnect after all tests
-    const mongoose = await import('mongoose')
-    await mongoose.connection.close()
+    if (isConnected) {
+      // Disconnect after all tests
+      const mongoose = await import('mongoose')
+      await mongoose.default.connection.close()
+    }
   })
 
   it('should create a project via POST /api/projects', async () => {
@@ -56,7 +75,7 @@ describe('Project CRUD', () => {
 
   it('should return 400 for invalid project name (too short)', async () => {
     const projectData = {
-      name: 'Ab',
+      name: 'A', // 1 char — below the 2-char minimum
       description: 'Too short name',
     }
 
@@ -120,7 +139,7 @@ describe('Project CRUD', () => {
 
     expect(response.status).toBe(200)
     expect(response.body.success).toBe(true)
-    const matching = response.body.data.filter((p: any => p.name.includes('Search')))
+    const matching = response.body.data.filter((p: any) => p.name.includes('Search'))
     expect(matching.length).toBeGreaterThan(0)
   })
 
@@ -147,9 +166,9 @@ describe('Project CRUD', () => {
     expect(deleteResponse.status).toBe(200)
     expect(deleteResponse.body.success).toBe(true)
 
-    // Verify tasks are also deleted
+    // Verify tasks are also deleted (scoped: the live DB holds seed data too)
     const remainingTasks = await request('http://localhost:5000')
-      .get('/api/tasks')
+      .get(`/api/tasks?project=${project.body.data._id}`)
 
     expect(remainingTasks.body.data.length).toBe(0)
   })

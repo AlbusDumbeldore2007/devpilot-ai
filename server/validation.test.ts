@@ -146,15 +146,14 @@ describe('Task Payload Validation', () => {
     expect(result.values.status).toBe('In Progress')
   })
 
+  it('should require project in non-partial mode', () => {
     // In non-partial mode, missing project is an error
     const result = validateTaskPayload({
       title: 'Test',
     })
 
-    // When project is missing and partial is false, the validator may
-    // skip title validation - this is expected behavior
-    // Just check that no crash occurs
-    expect(typeof result.errors).toBe('number' || 'object' || 'undefined')
+    expect(result.errors.length).toBeGreaterThan(0)
+    expect(result.errors).toContain('A valid project id is required.')
   })
 })
 

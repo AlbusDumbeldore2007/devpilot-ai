@@ -2,14 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // SSR: read the index.html template and inject the app root
-const indexHtml = fs.readFileSync(
-  path.resolve(__dirname, '../client/public/index.html'),
-  'utf-8'
-);
+const indexHtmlPath = path.resolve(__dirname, 'index.html');
+const indexHtml = fs.existsSync(indexHtmlPath) ? fs.readFileSync(indexHtmlPath, 'utf-8') : '';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -49,4 +48,5 @@ export function renderReactApp(app) {
   <div id="root">${app}</div>
   <script type="module" src="/assets/index.js"></script>
 </body>
-</html>
+</html>`;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validatePlan } from './planValidator.js'
+import { validatePlan } from './utils/planValidator.js'
 
 describe('Plan Validator', () => {
   it('should reject non-object input', () => {
@@ -38,7 +38,8 @@ describe('Plan Validator', () => {
             },
           ],
         },
-      ])
+      ],
+    })
     expect(result.errors).toHaveLength(0)
     expect(result.plan).not.toBeNull()
     expect(result.plan.projectTitle).toBe('My Project')
@@ -442,17 +443,15 @@ describe('Plan Validator', () => {
       description: 'A test project description with more than 10 characters',
       technologies: ['React'],
       difficulty: 'Medium',
-      phases: [
-        {
-          name: 'Phase 1',
-          tasks: Array(31).fill({
-            title: 'Task',
-            priority: 'High',
-            difficulty: 'Medium',
-            estimatedDays: 1,
-          }),
-        },
-      ]
+      phases: Array(5).fill(null).map((_, i) => ({
+        name: `Phase ${i + 1}`,
+        tasks: Array(13).fill({
+          title: 'Task',
+          priority: 'High',
+          difficulty: 'Medium',
+          estimatedDays: 1,
+        }),
+      })),
     })
     expect(result.errors).toContain('A plan cannot contain more than 60 tasks.')
   })

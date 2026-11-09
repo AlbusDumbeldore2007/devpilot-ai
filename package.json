@@ -10,6 +10,7 @@
     "dev:client": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
     "start": "npm start --prefix server",
+    "test": "npm test --prefix server",
     "seed": "npm run seed --prefix server"
   },
   "devDependencies": {

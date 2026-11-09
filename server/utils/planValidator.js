@@ -27,7 +27,7 @@ export function validatePlan(plan) {
   }
 
   const projectTitle = cleanText(plan.projectTitle);
-  if (projectTitle.length < 2) errors.push('projectTitle is missing or too short.');
+  if (projectTitle.length < 3) errors.push('projectTitle is missing or too short.');
   else if (projectTitle.length > 120) errors.push('projectTitle cannot exceed 120 characters.');
 
   const description = cleanText(plan.description);
